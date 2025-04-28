@@ -1,8 +1,10 @@
 package ru.elizarov;
-
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.env.Environment;
 
 import java.util.*;
 import java.util.function.Function;
@@ -25,16 +27,16 @@ public class AppConfig {
     }
 
     @Bean
-    public int randomValue() {
-        return random().nextInt(100); // от 0 до 99
+    @Scope("prototype")
+    public int randomValue(Random random) {
+        return random.nextInt(100); // от 0 до 99
     }
 
     // 9.1.3 дата первого обращения
-    private Date firstAccess = new Date();
-
     @Bean
+    @Scope("prototype")
     public Date startDateBean() {
-        return firstAccess;
+        return new Date(); // Всегда возвращаем текущую дату
     }
 
     // 9.1.4 предикат
@@ -56,14 +58,14 @@ public class AppConfig {
 
     // 9.2. генератор рендом чисел
     @Bean
-    public UniqueRandomGenerator uniqueRandomGenerator() {
-        return new UniqueRandomGenerator(min(), max());
+    public UniqueRandomGenerator uniqueRandomGenerator(int min, int max) {
+        return new UniqueRandomGenerator(min, max);
     }
 
     @Bean
     @Scope("prototype")
-    public int randomValue2() {
-        return uniqueRandomGenerator().next();
+    public int randomValue2(UniqueRandomGenerator uniqueRandomGenerator) {
+        return uniqueRandomGenerator.next();
     }
 
     // 9.2.2 Отзывы
@@ -78,32 +80,31 @@ public class AppConfig {
     }
 
     @Bean
-    public Review review3() {
-        return new Review("Сложно сказать", randomValue2());
+    @Scope("prototype") // Чтобы рейтинг обновлялся
+    public Review review3(int randomValue2) {
+        return new Review("Сложно сказать", randomValue2);
     }
 
     // 9.2.3 бест отзыв
     @Bean
-    public Review bestReview() {
-        Review r1 = review1();
-        Review r2 = review2();
-        Review r3 = review3();
-        return Collections.max(List.of(r1, r2, r3),
-                Comparator.comparingInt(Review::getRating));
+    @Scope("prototype")
+    public Review bestReview(ApplicationContext context) {
+        Map<String, Review> reviews = context.getBeansOfType(Review.class);
+        return Collections.max(reviews.values(), Comparator.comparingInt(Review::getRating));
     }
 
     // 9.2.4 студы
     @Bean
-    public Student student1() {
-        Student student = new Student("Иван", rangePredicate());
+    public Student student1(Predicate<Integer> rangePredicate) {
+        Student student = new Student("Иван", rangePredicate);
         student.addGrade(3);
         student.addGrade(4);
         return student;
     }
 
     @Bean
-    public Student student2() {
-        Student student = new Student("Мария", rangePredicate());
+    public Student student2(Predicate<Integer> rangePredicate) {
+        Student student = new Student("Мария", rangePredicate);
         student.addGrade(2);
         student.addGrade(5);
         return student;
@@ -111,8 +112,8 @@ public class AppConfig {
 
     // 9.2.5 билдер студентов
     @Bean
-    public StudentBuilder studentBuilder() {
-        return new StudentBuilder(rangePredicate());
+    public StudentBuilder studentBuilder(Predicate<Integer> rangePredicate) {
+        return new StudentBuilder(rangePredicate);
     }
 
     // 9.2.6 стриминг платформа
@@ -126,30 +127,38 @@ public class AppConfig {
         return new FileDataWriter();
     }
 
-    @Bean(name = "toUpperCase")
-    public Function<String, String> toUpperCase() {
+    @Bean
+    @Qualifier("toUpperCase")
+    public Function<String, String> toUpperCaseTransformer() {
         return String::toUpperCase;
     }
 
-    @Bean(name = "removeA")
-    public Function<String, String> removeA() {
+    @Bean
+    @Qualifier("removeA")
+    public Function<String, String> removeATransformer() {
         return s -> s.replaceAll("A", "");
     }
 
-    @Bean(name = "filterLongWords")
-    public Function<String, String> filterLongWords() {
-        return s -> String.join(" ",
-                Arrays.stream(s.split("\\s+"))
-                        .filter(word -> word.length() > 4)
-                        .collect(Collectors.toList()));
+    @Bean
+    @Qualifier("filterLongWords")
+    public Function<String, String> filterLongWordsTransformer() {
+        return s -> Arrays.stream(s.split("\\s+"))
+                .filter(word -> word.length() > 4)
+                .collect(Collectors.joining(" "));
     }
 
     @Bean
-    public DataProcessor dataProcessor() {
-        List<Function<String, String>> transformations = List.of(
-                toUpperCase(), removeA(), filterLongWords()
-        );
-        return new DataProcessor(dataReader(), dataWriter(), transformations);
+    public List<Function<String, String>> textTransformations(
+            @Qualifier("toUpperCase") Function<String, String> upperCase,
+            @Qualifier("removeA") Function<String, String> removeA,
+            @Qualifier("filterLongWords") Function<String, String> filterLongWords) {
+
+        return List.of(upperCase, removeA, filterLongWords);
+    }
+
+    @Bean
+    public DataProcessor dataProcessor(DataReader reader, DataWriter writer, List<Function<String, String>> textTransformations) {
+        return new DataProcessor(reader, writer, textTransformations);
     }
 
     // 9.2.7 светофор
@@ -180,16 +189,15 @@ public class AppConfig {
     }
 
     @Bean
-    public StockManager stockManager() {
+    public StockManager stockManager(StockSubscriber subscriber1, StockSubscriber subscriber2) {
         StockManager manager = new StockManager();
         Stock stock1 = new Stock("Apple");
         Stock stock2 = new Stock("Google");
-        stock1.addSubscriber(subscriber1());
-        stock2.addSubscriber(subscriber2());
+        stock1.addSubscriber(subscriber1);
+        stock2.addSubscriber(subscriber2);
         manager.addStock(stock1);
         manager.addStock(stock2);
         return manager;
     }
 }
-
 
