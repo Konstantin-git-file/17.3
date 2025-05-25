@@ -1,10 +1,8 @@
 package ru.elizarov;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Scope;
-import org.springframework.core.env.Environment;
+import org.springframework.context.annotation.*;
 
 import java.util.*;
 import java.util.function.Function;
@@ -14,13 +12,11 @@ import java.util.stream.Collectors;
 @Configuration
 public class AppConfig {
 
-    // 9.1.1 Hello world
     @Bean
     public String helloBean() {
         return "Hello world";
     }
 
-    // 9.1.2 random
     @Bean
     public Random random() {
         return new Random();
@@ -29,23 +25,20 @@ public class AppConfig {
     @Bean
     @Scope("prototype")
     public int randomValue(Random random) {
-        return random.nextInt(100); // от 0 до 99
+        return random.nextInt(100);
     }
 
-    // 9.1.3 дата первого обращения
     @Bean
     @Scope("prototype")
     public Date startDateBean() {
-        return new Date(); // Всегда возвращаем текущую дату
+        return new Date();
     }
 
-    // 9.1.4 предикат
     @Bean
     public Predicate<Integer> rangePredicate() {
         return x -> x >= 2 && x <= 5;
     }
 
-    // 9.1.5 минимакс
     @Bean(name = "min")
     public int min() {
         return 1;
@@ -56,7 +49,6 @@ public class AppConfig {
         return 10;
     }
 
-    // 9.2. генератор рендом чисел
     @Bean
     public UniqueRandomGenerator uniqueRandomGenerator(int min, int max) {
         return new UniqueRandomGenerator(min, max);
@@ -68,7 +60,6 @@ public class AppConfig {
         return uniqueRandomGenerator.next();
     }
 
-    // 9.2.2 Отзывы
     @Bean
     public Review review1() {
         return new Review("Очень хорошо", 4);
@@ -80,12 +71,11 @@ public class AppConfig {
     }
 
     @Bean
-    @Scope("prototype") // Чтобы рейтинг обновлялся
+    @Scope("prototype")
     public Review review3(int randomValue2) {
         return new Review("Сложно сказать", randomValue2);
     }
 
-    // 9.2.3 бест отзыв
     @Bean
     @Scope("prototype")
     public Review bestReview(ApplicationContext context) {
@@ -93,7 +83,6 @@ public class AppConfig {
         return Collections.max(reviews.values(), Comparator.comparingInt(Review::getRating));
     }
 
-    // 9.2.4 студы
     @Bean
     public Student student1(Predicate<Integer> rangePredicate) {
         Student student = new Student("Иван", rangePredicate);
@@ -110,13 +99,11 @@ public class AppConfig {
         return student;
     }
 
-    // 9.2.5 билдер студентов
     @Bean
     public StudentBuilder studentBuilder(Predicate<Integer> rangePredicate) {
         return new StudentBuilder(rangePredicate);
     }
 
-    // 9.2.6 стриминг платформа
     @Bean
     public DataReader dataReader() {
         return new FileDataReader();
@@ -161,43 +148,41 @@ public class AppConfig {
         return new DataProcessor(reader, writer, textTransformations);
     }
 
-    // 9.2.7 светофор
     @Bean
     public TrafficLight trafficLight() {
         return new ThreeColorTrafficLight();
     }
 
-    // 9.2.8 оповещения
     @Bean
     public StockSubscriber subscriber1() {
-        return new StockSubscriber() {
-            @Override
-            public void onPriceUpdate(String stockName, double newPrice) {
+        return (stockName, newPrice) ->
                 System.out.println("Подписчик 1: " + stockName + " = " + newPrice);
-            }
-        };
     }
 
     @Bean
     public StockSubscriber subscriber2() {
-        return new StockSubscriber() {
-            @Override
-            public void onPriceUpdate(String stockName, double newPrice) {
+        return (stockName, newPrice) ->
                 System.out.println("Подписчик 2: " + stockName + " = " + newPrice);
-            }
-        };
     }
 
     @Bean
-    public StockManager stockManager(StockSubscriber subscriber1, StockSubscriber subscriber2) {
+    public Stock appleStock(List<StockSubscriber> subscribers) {
+        Stock stock = new Stock("Apple");
+        subscribers.forEach(stock::addSubscriber);
+        return stock;
+    }
+
+    @Bean
+    public Stock googleStock(List<StockSubscriber> subscribers) {
+        Stock stock = new Stock("Google");
+        subscribers.forEach(stock::addSubscriber);
+        return stock;
+    }
+
+    @Bean
+    public StockManager stockManager(List<Stock> stocks) {
         StockManager manager = new StockManager();
-        Stock stock1 = new Stock("Apple");
-        Stock stock2 = new Stock("Google");
-        stock1.addSubscriber(subscriber1);
-        stock2.addSubscriber(subscriber2);
-        manager.addStock(stock1);
-        manager.addStock(stock2);
+        stocks.forEach(manager::addStock);
         return manager;
     }
 }
-
